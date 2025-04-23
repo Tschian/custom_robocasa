@@ -26,9 +26,6 @@ class PointCloudGenerator:
         o3d_point_cloud = o3d.geometry.PointCloud()
         colors = []
 
-        base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
-        base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
-
         for cam in self.cam_names:
             colors.append(imgs[cam])
 
