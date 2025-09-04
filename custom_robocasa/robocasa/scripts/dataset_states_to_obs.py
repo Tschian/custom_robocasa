@@ -870,7 +870,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    data_directory = "/home/qianwang/custom_robocasa/custom_robocasa/datasets/v0.1/single_stage"
+    data_directory = "/hkfs/work/workspace/scratch/ll6323-david_dataset_4/qian/robocasa_dataset/v0.1/single_stage"
     env_name = [
         "PnPCabToCounter",
         "PnPCounterToCab",
@@ -884,19 +884,19 @@ if __name__ == "__main__":
         "TurnOnStove",
         "TurnOffSinkFaucet",
         "TurnOnSinkFaucet",
-        "TurnSinkSpout",
-        "NavigateKitchen",
-        "TurnOffMicrowave",
-        "TurnOnMicrowave",
-        "CloseDrawer",
-        "OpenDrawer",
-        "CloseDoubleDoor",
-        "CloseSingleDoor",
-        "OpenDoubleDoor",
-        "OpenSingleDoor",
-        "CoffeePressButton",
-        "CoffeeServeMug",
-        "CoffeeSetupMug"
+        # "TurnSinkSpout",
+        # "NavigateKitchen",
+        # "TurnOffMicrowave",
+        # "TurnOnMicrowave",
+        # "CloseDrawer",
+        # "OpenDrawer",
+        # "CloseDoubleDoor",
+        # "CloseSingleDoor",
+        # "OpenDoubleDoor",
+        # "OpenSingleDoor",
+        # "CoffeePressButton",
+        # "CoffeeServeMug",
+        # "CoffeeSetupMug"
     ]
 
     for env in env_name:
