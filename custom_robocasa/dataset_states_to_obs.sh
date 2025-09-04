@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#SBATCH -A hk-project-p0022253
 #SBATCH -p accelerated
 #SBATCH -n 1
 #SBATCH -t 4:30:00
