@@ -1,6 +1,6 @@
 import open3d as o3d
 import numpy as np
-
+import einops
 from robosuite.utils.camera_utils import get_camera_intrinsic_matrix, get_camera_extrinsic_matrix
 import robosuite.utils.transform_utils as T
 
@@ -42,18 +42,31 @@ class PointCloudGenerator:
             transformed_cloud = o3d_cloud.transform(cam_pose)
 
             if not self.global_frame:
-                base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
-                base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
+                # base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
+                # base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
+                #
+                # base_pose = T.pose_inv(T.make_pose(base_pos, base_rot))
+                # transformed_cloud = transformed_cloud.transform(base_pose)
+                if cam == "robot0_agentview_left":
+                    reference_pose = cam_pose
 
-                base_pose = T.pose_inv(T.make_pose(base_pos, base_rot))
-                transformed_cloud = transformed_cloud.transform(base_pose)
+                transformed_cloud = transformed_cloud.transform(reference_pose)
 
             o3d_point_cloud += transformed_cloud
 
         pc_points = np.asarray(o3d_point_cloud.points)
-        pc_colors = np.array(colors).reshape(-1, 3)
-
-        pc = np.concatenate([pc_points, pc_colors], axis=1)
+        pc = (
+            einops.rearrange(
+                pc_points[:, :3],
+                "(num_cam h w) c -> num_cam h w c",
+                num_cam=len(self.cam_names),
+                h=224,
+                w=224,
+            )
+        ).astype(np.float32)
+        # pc_colors = np.array(colors).reshape(-1, 3)
+        #
+        # pc = np.concatenate([pc_points, pc_colors], axis=1)
         return pc
 
     def get_segmented_point_cloud(

@@ -15,6 +15,10 @@ import queue
 import time
 import traceback
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
+
 from robocasa.utils.env_utils import create_env
 import robocasa.utils.robomimic.robomimic_tensor_utils as TensorUtils
 import robocasa.utils.robomimic.robomimic_dataset_utils as DatasetUtils
@@ -35,12 +39,12 @@ from custom_robocasa.utils.point_cloud.sampling.fps_pc_sampler import (
 from custom_robocasa.utils.point_cloud.sampling.uniform_pc_sampler import (
     UniformPointCloudSampler,
 )
-from utils.transform_utils import (
-    axisangle2quat_numpy,
-    mat2quat_numpy,
-    quat2axisangle_numpy,
-    quat2mat_numpy,
-)
+# from utils.transform_utils import (
+#     axisangle2quat_numpy,
+#     mat2quat_numpy,
+#     quat2axisangle_numpy,
+#     quat2mat_numpy,
+# )
 
 # from robomimic.utils.log_utils import log_warning
 
@@ -125,19 +129,20 @@ def extract_trajectory(
                 max_segmented_pc_size, obs["segmented_point_cloud"].shape[0]
             )
 
-        obs_keys_to_remove = []
-        for obs_key in obs:
-            if args.dont_store_image and "image" in obs_key:
-                obs_keys_to_remove.append(obs_key)
-            
-            if args.dont_store_depth and "depth" in obs_key:
-                obs_keys_to_remove.append(obs_key)
-
-            if args.segmentation and "mask" in obs_key:
-                obs_keys_to_remove.append(obs_key)
+        obs_keys_to_remove = ["sampled_point_cloud", "segmented_sampled_point_cloud", "uniform_sampled_point_cloud"]
+        # for obs_key in obs:
+        #     if args.dont_store_image and "image" in obs_key:
+        #         obs_keys_to_remove.append(obs_key)
+        #
+        #     if args.dont_store_depth and "depth" in obs_key:
+        #         obs_keys_to_remove.append(obs_key)
+        #
+        #     if args.segmentation and "mask" in obs_key:
+        #         obs_keys_to_remove.append(obs_key)
 
         for obs_key in obs_keys_to_remove:
-            del obs[obs_key]
+            if obs_key in obs:
+                del obs[obs_key]
 
         # extract datagen info
         if add_datagen_info:
@@ -692,13 +697,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        required=True,
+        required=False,
+        default="",
         help="path to input hdf5 dataset",
     )
     # name of hdf5 to write - it will be in the same directory as @dataset
     parser.add_argument(
         "--output_name",
         type=str,
+        default="processed_demo_224_224.hdf5",
         help="name of output hdf5 dataset",
     )
 
@@ -740,14 +747,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--camera_height",
         type=int,
-        default=128,
+        default=224,
         help="(optional) height of image observations",
     )
 
     parser.add_argument(
         "--camera_width",
         type=int,
-        default=128,
+        default=224,
         help="(optional) width of image observations",
     )
 
@@ -767,6 +774,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--copy_rewards",
         action="store_true",
+        default=False,
         help="(optional) copy rewards from source file instead of inferring them",
     )
 
@@ -774,6 +782,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--copy_dones",
         action="store_true",
+        default=False,
         help="(optional) copy dones from source file instead of inferring them",
     )
 
@@ -831,6 +840,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--keep_full_pc",
         action="store_true",
+        default=True,
         help="whether to keep full point cloud in observation",
     )
 
@@ -859,4 +869,59 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    dataset_states_to_obs_multiprocessing(args)
+
+    data_directory = "/home/qianwang/custom_robocasa/custom_robocasa/datasets/v0.1/single_stage"
+    env_name = [
+        "PnPCabToCounter",
+        "PnPCounterToCab",
+        "PnPCounterToMicrowave",
+        "PnPCounterToSink",
+        "PnPCounterToStove",
+        "PnPMicrowaveToCounter",
+        "PnPSinkToCounter",
+        "PnPStoveToCounter",
+        "TurnOffStove",
+        "TurnOnStove",
+        "TurnOffSinkFaucet",
+        "TurnOnSinkFaucet",
+        "TurnSinkSpout",
+        "NavigateKitchen",
+        "TurnOffMicrowave",
+        "TurnOnMicrowave",
+        "CloseDrawer",
+        "OpenDrawer",
+        "CloseDoubleDoor",
+        "CloseSingleDoor",
+        "OpenDoubleDoor",
+        "OpenSingleDoor",
+        "CoffeePressButton",
+        "CoffeeServeMug",
+        "CoffeeSetupMug"
+    ]
+
+    for env in env_name:
+        if 'PnP' in env:
+            data_dir = os.path.join(data_directory, "kitchen_pnp", env)
+        elif 'Door' in env:
+            data_dir = os.path.join(data_directory, "kitchen_doors", env)
+        elif 'Drawer' in env:
+            data_dir = os.path.join(data_directory, "kitchen_drawer", env)
+        elif 'Coffee' in env:
+            data_dir = os.path.join(data_directory, "kitchen_coffee", env)
+        elif 'Stove' in env:
+            data_dir = os.path.join(data_directory, "kitchen_stove", env)
+        elif 'Sink' in env:
+            data_dir = os.path.join(data_directory, "kitchen_sink", env)
+        elif 'Microwave' in env:
+            data_dir = os.path.join(data_directory, "kitchen_microwave", env)
+        else:
+            raise ValueError(f"Unknown environment: {env}")
+
+        data_dir = os.path.join(data_dir, os.listdir(data_dir)[0], "demo_gentex_im128_randcams.hdf5")
+
+        args.dataset = data_dir
+        try:
+            dataset_states_to_obs_multiprocessing(args)
+        except Exception as e:
+            print("Error processing env {}: {}".format(env, e))
+            print(traceback.format_exc())
