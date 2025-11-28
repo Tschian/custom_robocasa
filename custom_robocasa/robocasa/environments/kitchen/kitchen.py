@@ -979,10 +979,10 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
             self._randomize_cameras()
 
         for (cam_name, cam_cfg) in self._cam_configs.items():
-            if cam_cfg.get("parent_body", None) is not None:
+            if cam_cfg.get("parent_body", None) is not None:  # Those are handled later when the robot model is built, so they are skipped here.
                 continue
 
-            self.mujoco_arena.set_camera(
+            self.mujoco_arena.set_camera(      # no parent body means static, hence directly set in the arena
                 camera_name=cam_name,
                 pos=cam_cfg["pos"],
                 quat=cam_cfg["quat"],

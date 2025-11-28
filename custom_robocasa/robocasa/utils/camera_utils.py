@@ -89,6 +89,7 @@ CAM_CONFIGS = dict(
             quat=[0, 0.707107, 0.707107, 0],
             parent_body="robot0_right_hand",
         ),
+    # add the additional camera here
     ),
     ### Add robot specific configs here ####
     PandaMobile=dict(),
