@@ -20,6 +20,59 @@ class PointCloudGenerator:
         self.img_height = img_height
         self.global_frame = global_frame
 
+    def get_point_map_and_ray_map(self, imgs: dict[str, np.ndarray], depths: dict[str, np.ndarray]):
+        o3d_point_cloud = o3d.geometry.PointCloud()
+        colors = []
+
+        for cam in self.cam_names:
+            colors.append(imgs[cam])
+
+            cam_intrinsics = self._get_cam_intrinsic(
+                cam, self.img_width, self.img_height
+            )
+
+            o3d_depth = o3d.geometry.Image(depths[cam])
+            o3d_cloud = o3d.geometry.PointCloud.create_from_depth_image(
+                o3d_depth, cam_intrinsics
+            )
+
+            cam_pose = get_camera_extrinsic_matrix(self.sim, cam)
+            transformed_cloud = o3d_cloud.transform(cam_pose)
+
+            if not self.global_frame:
+                base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
+                base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
+                
+                base_pose = T.pose_inv(T.make_pose(base_pos, base_rot))
+                transformed_cloud = transformed_cloud.transform(base_pose)
+                # if cam == "robot0_agentview_left":
+                #     reference_pose = cam_pose
+
+                # transformed_cloud = transformed_cloud.transform(reference_pose)
+
+            o3d_point_cloud += transformed_cloud
+
+        pc_points = np.asarray(o3d_point_cloud.points)
+        pc = (
+            einops.rearrange(
+                pc_points[:, :3],
+                "(num_cam h w) c -> num_cam h w c",
+                num_cam=len(self.cam_names),
+                h=128,
+                w=128,
+            )
+        ).astype(np.float32)
+        # pc_colors = np.array(colors).reshape(-1, 3)
+        #
+        # pc = np.concatenate([pc_points, pc_colors], axis=1)
+        point_map = {}
+        ray_map = {}
+        for i, cam in enumerate(self.cam_names):
+            point_map[cam] = pc[i]
+            ray_map[cam] = self.get_ray_map(cam)
+
+        return point_map, ray_map
+
     def get_point_cloud(
         self, imgs: dict[str, np.ndarray], depths: dict[str, np.ndarray]
     ) -> np.ndarray:
@@ -42,15 +95,15 @@ class PointCloudGenerator:
             transformed_cloud = o3d_cloud.transform(cam_pose)
 
             if not self.global_frame:
-                # base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
-                # base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
-                #
-                # base_pose = T.pose_inv(T.make_pose(base_pos, base_rot))
-                # transformed_cloud = transformed_cloud.transform(base_pose)
-                if cam == "robot0_agentview_left":
-                    reference_pose = cam_pose
+                base_pos = self.sim.data.get_site_xpos(f"mobilebase0_center")
+                base_rot = self.sim.data.get_site_xmat(f"mobilebase0_center")
+                
+                base_pose = T.pose_inv(T.make_pose(base_pos, base_rot))
+                transformed_cloud = transformed_cloud.transform(base_pose)
+                # if cam == "robot0_agentview_left":
+                #     reference_pose = cam_pose
 
-                transformed_cloud = transformed_cloud.transform(reference_pose)
+                # transformed_cloud = transformed_cloud.transform(reference_pose)
 
             o3d_point_cloud += transformed_cloud
 
@@ -60,8 +113,8 @@ class PointCloudGenerator:
                 pc_points[:, :3],
                 "(num_cam h w) c -> num_cam h w c",
                 num_cam=len(self.cam_names),
-                h=224,
-                w=224,
+                h=128,
+                w=128,
             )
         ).astype(np.float32)
         # pc_colors = np.array(colors).reshape(-1, 3)
@@ -142,3 +195,30 @@ class PointCloudGenerator:
         fy = cam_mat[1, 1]
 
         return o3d.camera.PinholeCameraIntrinsic(img_width, img_height, fx, fy, cx, cy)
+
+
+    def get_ray_map(self, cam):
+        K = get_camera_intrinsic_matrix(self.sim, cam, self.img_height, self.img_width)  # 3x3
+        R = get_camera_extrinsic_matrix(self.sim, cam)  # 4x4, camera->world
+
+        # pixel grid
+        u = np.arange(self.img_width)
+        v = np.arange(self.img_height)
+        uu, vv = np.meshgrid(u, v)  # HxW
+
+        ones = np.ones_like(uu)
+        pix = np.stack([uu, vv, ones], axis=-1).astype(np.float32)  # HxW x3
+
+        Kinv = np.linalg.inv(K)
+        d_cam = pix @ Kinv.T  # HxW x3
+        d_cam /= np.linalg.norm(d_cam, axis=-1, keepdims=True) + 1e-8
+
+        Rwc = R[:3, :3]
+        C = R[:3, 3]
+
+        d_world = d_cam @ Rwc.T  # HxW x3
+        # Plücker moment
+        m = np.cross(C[None, None, :], d_world)  # HxW x3
+
+        ray_map = np.concatenate([d_world, m], axis=-1).astype(np.float32)  # HxW x6
+        return ray_map

@@ -25,20 +25,23 @@ import robocasa.utils.robomimic.robomimic_dataset_utils as DatasetUtils
 from tqdm import tqdm
 
 from custom_robocasa.env_wrappers.robosuite_wrapper import RobosuiteWrapper
-from custom_robocasa.env_wrappers.segmentation_wrapper import SegmentationWrapper
-from custom_robocasa.env_wrappers.point_cloud_wrapper import PointCloudWrapper
-from custom_robocasa.env_wrappers.point_cloud_sampling_wrapper import (
-    PointCloudSamplingWrapper,
+# from custom_robocasa.env_wrappers.segmentation_wrapper import SegmentationWrapper
+# from custom_robocasa.env_wrappers.point_cloud_wrapper import PointCloudWrapper
+from custom_robocasa.env_wrappers.point_ray_map_wrapper import (
+    PointRayMapWrapper,
 )
-from custom_robocasa.env_wrappers.segmented_point_cloud_sampling_wrapper import (
-    SegmentedPointCloudSamplingWrapper,
-)
-from custom_robocasa.utils.point_cloud.sampling.fps_pc_sampler import (
-    FPSPointCloudSampler,
-)
-from custom_robocasa.utils.point_cloud.sampling.uniform_pc_sampler import (
-    UniformPointCloudSampler,
-)
+# from custom_robocasa.env_wrappers.point_cloud_sampling_wrapper import (
+#     PointCloudSamplingWrapper,
+# )
+# from custom_robocasa.env_wrappers.segmented_point_cloud_sampling_wrapper import (
+#     SegmentedPointCloudSamplingWrapper,
+# )
+# from custom_robocasa.utils.point_cloud.sampling.fps_pc_sampler import (
+#     FPSPointCloudSampler,
+# )
+# from custom_robocasa.utils.point_cloud.sampling.uniform_pc_sampler import (
+#     UniformPointCloudSampler,
+# )
 # from utils.transform_utils import (
 #     axisangle2quat_numpy,
 #     mat2quat_numpy,
@@ -115,13 +118,13 @@ def extract_trajectory(
     for t in tqdm(range(traj_len)):
         obs = deepcopy(env.reset_to({"states": states[t]}))
 
-        if not args.keep_full_pc:
+        if not args.keep_full_pc and "point_cloud" in obs:
             del obs["point_cloud"]
 
-            if args.segmentation:
+            if args.segmentation and "segmented_point_cloud" in obs:
                 del obs["segmented_point_cloud"]
 
-        elif args.segmentation:
+        elif args.segmentation and "segmented_point_cloud" in obs:
             obs["segmented_point_cloud"] = np.concatenate(
                 list(obs["segmented_point_cloud"].values())
             )
@@ -175,14 +178,14 @@ def extract_trajectory(
         traj["datagen_info"].append(datagen_info)
         # traj["actions_abs"].append(action_abs)
 
-    if args.segmentation and args.keep_full_pc:
-        for i in range(len(traj["obs"])):
-            traj["obs"][i]["segmented_pc_size"] = traj["obs"][i][
-                "segmented_point_cloud"
-            ].shape[0]
-            traj["obs"][i]["segmented_point_cloud"] = np.resize(
-                traj["obs"][i]["segmented_point_cloud"], (max_segmented_pc_size, 6)
-            )
+    # if args.segmentation and args.keep_full_pc:
+    #     for i in range(len(traj["obs"])):
+    #         traj["obs"][i]["segmented_pc_size"] = traj["obs"][i][
+    #             "segmented_point_cloud"
+    #         ].shape[0]
+    #         traj["obs"][i]["segmented_point_cloud"] = np.resize(
+    #             traj["obs"][i]["segmented_point_cloud"], (max_segmented_pc_size, 6)
+    #         )
 
     # convert list of dict to dict of list for obs dictionaries (for convenient writes to hdf5 dataset)
     traj["obs"] = TensorUtils.list_of_flat_dict_to_dict_of_list(traj["obs"])
@@ -545,51 +548,52 @@ def create_env_with_wrappers(env_name, args):
         camera_widths=args.camera_width,
     )
 
-    if args.segmentation:
-        env = SegmentedPointCloudSamplingWrapper(
-            SegmentedPointCloudSamplingWrapper(
-                PointCloudSamplingWrapper(
-                    PointCloudSamplingWrapper(
-                        PointCloudWrapper(
-                            SegmentationWrapper(
-                                RobosuiteWrapper(base_env),
-                                env_name=env_name,
-                            ),
-                            global_frame=args.pc_in_global_frame,
-                            get_segmented_pc=True,
-                        ),
-                        pc_sampler=FPSPointCloudSampler(),
-                        num_points=args.pc_size,
-                    ),
-                    pc_sampler=UniformPointCloudSampler(),
-                    num_points=args.pc_size,
-                ),
-                env_name=env_name,
-                obj_sampler=FPSPointCloudSampler(),
-                rest_sampler=FPSPointCloudSampler(),
-                num_points=args.pc_size,
-                obj_max_num_points=args.pc_obj_max_size,
-            ),
-            env_name=env_name,
-            obj_sampler=UniformPointCloudSampler(),
-            rest_sampler=UniformPointCloudSampler(),
-            num_points=args.pc_size,
-            obj_max_num_points=args.pc_obj_max_size,
-        )
+    # if args.segmentation:
+    #     env = SegmentedPointCloudSamplingWrapper(
+    #         SegmentedPointCloudSamplingWrapper(
+    #             PointCloudSamplingWrapper(
+    #                 PointCloudSamplingWrapper(
+    #                     PointCloudWrapper(
+    #                         SegmentationWrapper(
+    #                             RobosuiteWrapper(base_env),
+    #                             env_name=env_name,
+    #                         ),
+    #                         global_frame=args.pc_in_global_frame,
+    #                         get_segmented_pc=True,
+    #                     ),
+    #                     pc_sampler=FPSPointCloudSampler(),
+    #                     num_points=args.pc_size,
+    #                 ),
+    #                 pc_sampler=UniformPointCloudSampler(),
+    #                 num_points=args.pc_size,
+    #             ),
+    #             env_name=env_name,
+    #             obj_sampler=FPSPointCloudSampler(),
+    #             rest_sampler=FPSPointCloudSampler(),
+    #             num_points=args.pc_size,
+    #             obj_max_num_points=args.pc_obj_max_size,
+    #         ),
+    #         env_name=env_name,
+    #         obj_sampler=UniformPointCloudSampler(),
+    #         rest_sampler=UniformPointCloudSampler(),
+    #         num_points=args.pc_size,
+    #         obj_max_num_points=args.pc_obj_max_size,
+    #     )
 
-    else:
-        env = PointCloudSamplingWrapper(
-            PointCloudSamplingWrapper(
-                PointCloudWrapper(
-                    RobosuiteWrapper(base_env),
-                    global_frame=args.pc_in_global_frame,
-                ),
-                pc_sampler=FPSPointCloudSampler(),
-                num_points=args.pc_size,
-            ),
-            pc_sampler=UniformPointCloudSampler(),
-            num_points=args.pc_size,
-        )
+    # else:
+        # env = PointCloudSamplingWrapper(
+        #     PointCloudSamplingWrapper(
+        #         PointCloudWrapper(
+        #             RobosuiteWrapper(base_env),
+        #             global_frame=args.pc_in_global_frame,
+        #         ),
+        #         pc_sampler=FPSPointCloudSampler(),
+        #         num_points=args.pc_size,
+        #     ),
+        #     pc_sampler=UniformPointCloudSampler(),
+        #     num_points=args.pc_size,
+        # )
+    env = PointRayMapWrapper(RobosuiteWrapper(base_env))
 
     return env
 
@@ -705,7 +709,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_name",
         type=str,
-        default="processed_demo_224_224.hdf5",
+        default="processed_demo_128_128.hdf5",
         help="name of output hdf5 dataset",
     )
 
@@ -747,14 +751,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--camera_height",
         type=int,
-        default=224,
+        default=128,
         help="(optional) height of image observations",
     )
 
     parser.add_argument(
         "--camera_width",
         type=int,
-        default=224,
+        default=128,
         help="(optional) width of image observations",
     )
 
@@ -870,32 +874,32 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    data_directory = "/hkfs/work/workspace/scratch/ll6323-david_dataset_4/qian/custom_robocasa/custom_robocasa/datasets/v0.1/single_stage"
+    data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
     env_name = [
-        "PnPCabToCounter",
-        "PnPCounterToCab",
-        "PnPCounterToMicrowave",
-        "PnPCounterToSink",
-        "PnPCounterToStove",
-        "PnPMicrowaveToCounter",
-        "PnPSinkToCounter",
-        "PnPStoveToCounter",
-        "TurnOffStove",
-        "TurnOnStove",
+        # "PnPCabToCounter",
+        # "PnPCounterToCab",
+        # "PnPCounterToMicrowave",
+        # "PnPCounterToSink",
+        # "PnPCounterToStove",
+        # "PnPMicrowaveToCounter",
+        # "PnPSinkToCounter",
+        # "PnPStoveToCounter",
+        # "TurnOffStove",
+        # "TurnOnStove",
         "TurnOffSinkFaucet",
         "TurnOnSinkFaucet",
         "TurnSinkSpout",
-        "TurnOffMicrowave",
-        "TurnOnMicrowave",
-        "CloseDrawer",
-        "OpenDrawer",
-        "CloseDoubleDoor",
-        "CloseSingleDoor",
-        "OpenDoubleDoor",
-        "OpenSingleDoor",
-        "CoffeePressButton",
-        "CoffeeServeMug",
-        "CoffeeSetupMug"
+        # "TurnOffMicrowave",
+        # "TurnOnMicrowave",
+        # "CloseDrawer",
+        # "OpenDrawer",
+        # "CloseDoubleDoor",
+        # "CloseSingleDoor",
+        # "OpenDoubleDoor",
+        # "OpenSingleDoor",
+        # "CoffeePressButton",
+        # "CoffeeServeMug",
+        # "CoffeeSetupMug"
     ]
 
     for env in env_name:
