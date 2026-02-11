@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gym
+import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -55,8 +56,9 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         # cached reference axes for sampling camera poses
         self.ref_forward = None
         self.ref_right = None
-        self.ref_up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        self.ref_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
         self._virtual_pose_map = {}
+        self._virtual_valid = {}
 
         self._set_azimuth_elevation_ranges(
             left_az_range=left_az_range,
@@ -143,7 +145,17 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
 
         if self.num_cameras > 0:
             width, height = self._resolve_render_size(self.left_cam_name)
+            base_left_img = obs.get(f"{self.left_cam_name}_image")
+            base_left_depth = obs.get(f"{self.left_cam_name}_depth")
             for name, (pos_w, rot_w) in zip(self._left_names, self._left_poses):
+                if not self._virtual_valid.get(name, True):
+                    if base_left_img is not None:
+                        obs[f"{name}_image"] = base_left_img
+                    if self.include_depth and base_left_depth is not None:
+                        obs[f"{name}_depth"] = base_left_depth
+                    obs[f"{name}_valid"] = np.array([0], dtype=np.uint8)
+                    continue
+
                 self._set_camera_world_pose(left_cam_id, left_body_id, pos_w, rot_w)
                 self.sim.forward()
                 img = self.sim.render(
@@ -158,10 +170,21 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
                     obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
                 else:
                     obs[f"{name}_image"] = img[::convention]
+                obs[f"{name}_valid"] = np.array([1], dtype=np.uint8)
 
         if self.num_cameras > 0:
             width, height = self._resolve_render_size(self.right_cam_name)
+            base_right_img = obs.get(f"{self.right_cam_name}_image")
+            base_right_depth = obs.get(f"{self.right_cam_name}_depth")
             for name, (pos_w, rot_w) in zip(self._right_names, self._right_poses):
+                if not self._virtual_valid.get(name, True):
+                    if base_right_img is not None:
+                        obs[f"{name}_image"] = base_right_img
+                    if self.include_depth and base_right_depth is not None:
+                        obs[f"{name}_depth"] = base_right_depth
+                    obs[f"{name}_valid"] = np.array([0], dtype=np.uint8)
+                    continue
+
                 self._set_camera_world_pose(right_cam_id, right_body_id, pos_w, rot_w)
                 self.sim.forward()
                 img = self.sim.render(
@@ -176,6 +199,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
                     obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
                 else:
                     obs[f"{name}_image"] = img[::convention]
+                obs[f"{name}_valid"] = np.array([1], dtype=np.uint8)
 
         self.sim.model.cam_pos[left_cam_id] = left_pos_local
         self.sim.model.cam_quat[left_cam_id] = left_quat_local
@@ -189,7 +213,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         self._refresh_cam_ids()
 
         ref_fixture = self.env.init_robot_base_pos
-        pivot = np.array(ref_fixture.pos, dtype=np.float64)
+        pivot = np.array(ref_fixture.pos, dtype=np.float32)
 
         left_pos_w, _ = self._get_camera_world_pose(self.left_cam_name)
         right_pos_w, _ = self._get_camera_world_pose(self.right_cam_name)
@@ -205,7 +229,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         robot_pos = self.env.robots[0].base_pos
         if robot_pos is None:
             robot_pos = self.sim.data.get_body_xpos(self.env.robots[0].robot_model.root_body)
-        robot_pos = np.array(robot_pos, dtype=np.float64)
+        robot_pos = np.array(robot_pos, dtype=np.float32)
 
         forward = robot_pos - pivot
         forward[2] = 0.0
@@ -216,7 +240,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
 
         right = np.cross(forward, self.ref_up)
         if np.linalg.norm(right) < 1e-6:
-            right = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+            right = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         right = right / np.linalg.norm(right)
 
         self.ref_forward = forward
@@ -234,14 +258,20 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         )
 
         self._left_poses = []
+        self._right_poses = []
         for direction in left_dirs:
             pos_w = pivot + left_radius * direction
+            if self._is_occluded(pos_w, pivot):
+                self._left_poses.append((pos_w, None))
+                continue
             rot_w = self._look_at_rotation(pos_w, pivot)
             self._left_poses.append((pos_w, rot_w))
 
-        self._right_poses = []
         for direction in right_dirs:
             pos_w = pivot + right_radius * direction
+            if self._is_occluded(pos_w, pivot):
+                self._right_poses.append((pos_w, None))
+                continue
             rot_w = self._look_at_rotation(pos_w, pivot)
             self._right_poses.append((pos_w, rot_w))
 
@@ -249,6 +279,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
             **{name: pose for name, pose in zip(self._left_names, self._left_poses)},
             **{name: pose for name, pose in zip(self._right_names, self._right_poses)},
         }
+        self._virtual_valid = {name: (rot_w is not None) for name, (_, rot_w) in self._virtual_pose_map.items()}
 
     def _sample_unit_vectors_random(
         self,
@@ -261,7 +292,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         Azimuth is measured in the forward-right plane; elevation is measured above that plane.
         """
         if count <= 0:
-            return np.zeros((0, 3), dtype=np.float64)
+            return np.zeros((0, 3), dtype=np.float32)
 
         if self.ref_forward is None or self.ref_right is None:
             raise RuntimeError("Reference axes not set; call _sample_camera_poses() first.")
@@ -298,7 +329,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         Uses a stratified grid in azimuth and sin(elevation) to make area per sample roughly uniform.
         """
         if count <= 0:
-            return np.zeros((0, 3), dtype=np.float64)
+            return np.zeros((0, 3), dtype=np.float32)
 
         if self.ref_forward is None or self.ref_right is None:
             raise RuntimeError("Reference axes not set; call _sample_camera_poses() first.")
@@ -416,6 +447,19 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
         Extrinsics for virtual cameras. Returns camera->world pose with robosuite axis correction.
         """
         pos_w, rot_w = self.get_virtual_camera_pose(cam_name)
+        if rot_w is None:
+            base_cam = self.left_cam_name if cam_name.startswith(self.left_prefix) else self.right_cam_name
+            cam_id = self.sim.model.camera_name2id(base_cam)
+            camera_pos = self.sim.data.cam_xpos[cam_id]
+            camera_rot = self.sim.data.cam_xmat[cam_id].reshape(3, 3)
+            T = np.eye(4, dtype=np.float64)
+            T[:3, :3] = camera_rot
+            T[:3, 3] = camera_pos
+            corr = np.array(
+                [[1.0, 0.0, 0.0, 0.0], [0.0, -1.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+                dtype=np.float64,
+            )
+            return T @ corr
         R = rot_w.as_matrix()
         T = np.eye(4, dtype=np.float64)
         T[:3, :3] = R
@@ -425,6 +469,30 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
             dtype=np.float64,
         )
         return T @ corr
+
+    def _is_occluded(self, cam_pos: np.ndarray, target_pos: np.ndarray, eps: float = 1e-3) -> bool:
+        ray_dir = target_pos - cam_pos
+        dist = np.linalg.norm(ray_dir)
+        if dist < 1e-6:
+            return False
+        ray_dir = ray_dir / dist
+        pnt = np.asarray(cam_pos, dtype=np.float64).reshape(3, 1)
+        vec = np.asarray(ray_dir, dtype=np.float64).reshape(3, 1)
+        geomgroup = np.zeros((6, 1), dtype=np.uint8)
+        geomid = np.array([[-1]], dtype=np.int32)
+        hit_dist = mujoco.mj_ray(
+            self.sim.model._model,
+            self.sim.data._data,
+            pnt,
+            vec,
+            geomgroup,
+            1,
+            -1,
+            geomid,
+        )
+        if geomid[0, 0] < 0:
+            return False
+        return float(hit_dist) < dist - eps
 
     def _check_success(self):
         return self.env._check_success()
@@ -457,10 +525,15 @@ if __name__ == "__main__":
         images[f"{left_name}"] = obs[f"{left_name}_image"]
         images[f"{right_name}"] = obs[f"{right_name}_image"]
 
+        if f"{left_name}_valid" in obs and obs[f"{left_name}_valid"][0] == 1:
+            print(f"Virtual camera {left_name} is valid.")
+        if f"{right_name}_valid" in obs and obs[f"{right_name}_valid"][0] == 1:
+            print(f"Virtual camera {right_name} is valid.")
 
-    for key, img in images.items():
-        img = img[::-1]
-        cv2.imshow(f"{key}", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+
+    # for key, img in images.items():
+    #     img = img[::-1]
+    #     cv2.imshow(f"{key}", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     

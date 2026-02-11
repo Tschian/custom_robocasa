@@ -159,6 +159,8 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
         ray_map = np.concatenate([d_world, m], axis=-1).astype(np.float32)
         return ray_map
 
+    def _check_success(self):
+        return self.env._check_success()
 
 if __name__ == "__main__":
     import numpy as np
@@ -194,12 +196,14 @@ if __name__ == "__main__":
 
     images = {}
     for name in env.cam_names:
-        images[name] = obs[f"{name}_image"]
+        if f"{name}_valid" in obs and obs[f"{name}_valid"][0] == 1:
+            print(f"Virtual camera {name} is valid.")
+        # images[name] = obs[f"{name}_image"]
 
-    for key, img in images.items():
-        img = img[::-1]
-        cv2.imshow(f"{key}", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # for key, img in images.items():
+    #     img = img[::-1]
+    #     cv2.imshow(f"{key}", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     
-    print("OK: virtual cameras + point/ray maps present")
+    # print("OK: virtual cameras + point/ray maps present")

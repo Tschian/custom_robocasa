@@ -30,6 +30,12 @@ from custom_robocasa.env_wrappers.robosuite_wrapper import RobosuiteWrapper
 from custom_robocasa.env_wrappers.point_ray_map_wrapper import (
     PointRayMapWrapper,
 )
+from custom_robocasa.env_wrappers.virtual_point_ray_map_wrapper import (
+    VirtualPointRayMapWrapper,
+)
+from custom_robocasa.env_wrappers.robocasa_quarter_sphere_camera_wrapper import (
+    RobocasaQuarterSphereCameraWrapper,
+)
 # from custom_robocasa.env_wrappers.point_cloud_sampling_wrapper import (
 #     PointCloudSamplingWrapper,
 # )
@@ -132,7 +138,11 @@ def extract_trajectory(
                 max_segmented_pc_size, obs["segmented_point_cloud"].shape[0]
             )
 
-        obs_keys_to_remove = ["sampled_point_cloud", "segmented_sampled_point_cloud", "uniform_sampled_point_cloud"]
+        obs_keys_to_remove = [
+            "sampled_point_cloud",
+            "segmented_sampled_point_cloud",
+            "uniform_sampled_point_cloud",
+        ]
         # for obs_key in obs:
         #     if args.dont_store_image and "image" in obs_key:
         #         obs_keys_to_remove.append(obs_key)
@@ -146,6 +156,27 @@ def extract_trajectory(
         for obs_key in obs_keys_to_remove:
             if obs_key in obs:
                 del obs[obs_key]
+
+        # drop invalid virtual camera observations (keep the valid mask)
+        invalid_suffixes = ("_image", "_depth", "_point", "_ray")
+        for k in list(obs.keys()):
+            if k.endswith("_valid"):
+                try:
+                    is_valid = int(np.asarray(obs[k]).item())
+                except Exception:
+                    continue
+                if is_valid == 0:
+                    prefix = k[: -len("_valid")]
+                    for suf in invalid_suffixes:
+                        key = f"{prefix}{suf}"
+                        if key in obs:
+                            del obs[key]
+
+        if args.point_ray_dtype in ("float16", "float32"):
+            dtype = np.float16 if args.point_ray_dtype == "float16" else np.float32
+            for k in list(obs.keys()):
+                if k.endswith("_point") or k.endswith("_ray"):
+                    obs[k] = obs[k].astype(dtype, copy=False)
 
         # extract datagen info
         if add_datagen_info:
@@ -593,7 +624,22 @@ def create_env_with_wrappers(env_name, args):
         #     pc_sampler=UniformPointCloudSampler(),
         #     num_points=args.pc_size,
         # )
-    env = PointRayMapWrapper(RobosuiteWrapper(base_env))
+    env = RobosuiteWrapper(base_env)
+    if args.use_virtual_cameras:
+        env = RobocasaQuarterSphereCameraWrapper(
+            env,
+            num_cameras=args.num_virtual_cameras,
+            include_depth=True,
+        )
+        env = VirtualPointRayMapWrapper(
+            env,
+            virtual_cam_names=env.get_virtual_camera_names(),
+            virtual_intrinsic_fn=env.virtual_intrinsic_fn,
+            virtual_extrinsic_fn=env.virtual_extrinsic_fn,
+            include_real_cams=True,
+        )
+    else:
+        env = PointRayMapWrapper(env)
 
     return env
 
@@ -709,7 +755,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_name",
         type=str,
-        default="processed_demo_128_128.hdf5",
+        default="multi_view_im128_spherecams.hdf5",
         help="name of output hdf5 dataset",
     )
 
@@ -807,7 +853,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_procs",
         type=int,
-        default=5,
+        default=2,
         help="number of parallel processes for extracting image obs",
     )
 
@@ -872,6 +918,27 @@ if __name__ == "__main__":
         help="whether to store depth observations",
     )
 
+    parser.add_argument(
+        "--use_virtual_cameras",
+        default=True,
+        help="use virtual multiview cameras + virtual point/ray map wrapper",
+    )
+
+    parser.add_argument(
+        "--num_virtual_cameras",
+        type=int,
+        default=8,
+        help="number of virtual cameras per side",
+    )
+
+    parser.add_argument(
+        "--point_ray_dtype",
+        type=str,
+        default="float16",
+        choices=["float16", "float32"],
+        help="dtype to store point/ray maps",
+    )
+
     args = parser.parse_args()
 
     data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
@@ -886,8 +953,8 @@ if __name__ == "__main__":
         # "PnPStoveToCounter",
         # "TurnOffStove",
         # "TurnOnStove",
-        "TurnOffSinkFaucet",
-        "TurnOnSinkFaucet",
+        # "TurnOffSinkFaucet",
+        # "TurnOnSinkFaucet",
         "TurnSinkSpout",
         # "TurnOffMicrowave",
         # "TurnOnMicrowave",
