@@ -87,13 +87,18 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
-        if (self._left_poses is None and self._right_poses is None):
-            self._sample_camera_poses()
+        self._left_poses = None
+        self._right_poses = None
+        self._sample_camera_poses()
         return self._add_extra_camera_obs(obs)
 
     def reset_to(self, state):
         obs = self.env.reset_to(state)
-        if (self._left_poses is None and self._right_poses is None):
+        if "model" in state:
+            # Full episode reset: new kitchen layout loaded, resample virtual camera poses
+            self._sample_camera_poses()
+        elif self._left_poses is None or self._right_poses is None:
+            # First call without a prior reset() (e.g. standalone use)
             self._sample_camera_poses()
         return self._add_extra_camera_obs(obs)
 
@@ -214,6 +219,7 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
 
         ref_fixture = self.env.init_robot_base_pos
         pivot = np.array(ref_fixture.pos, dtype=np.float32)
+        print(f"Sampling camera poses around current pivot point: {pivot}")
 
         left_pos_w, _ = self._get_camera_world_pose(self.left_cam_name)
         right_pos_w, _ = self._get_camera_world_pose(self.right_cam_name)

@@ -105,7 +105,7 @@ def extract_trajectory(
 
     traj = dict(
         obs=[],
-        next_obs=[],
+        # next_obs=[],
         rewards=[],
         dones=[],
         actions=np.array(actions),
@@ -124,41 +124,41 @@ def extract_trajectory(
     for t in tqdm(range(traj_len)):
         obs = deepcopy(env.reset_to({"states": states[t]}))
 
-        if not args.keep_full_pc and "point_cloud" in obs:
-            del obs["point_cloud"]
-
-            if args.segmentation and "segmented_point_cloud" in obs:
-                del obs["segmented_point_cloud"]
-
-        elif args.segmentation and "segmented_point_cloud" in obs:
-            obs["segmented_point_cloud"] = np.concatenate(
-                list(obs["segmented_point_cloud"].values())
-            )
-            max_segmented_pc_size = max(
-                max_segmented_pc_size, obs["segmented_point_cloud"].shape[0]
-            )
-
-        obs_keys_to_remove = [
-            "sampled_point_cloud",
-            "segmented_sampled_point_cloud",
-            "uniform_sampled_point_cloud",
-        ]
-        # for obs_key in obs:
-        #     if args.dont_store_image and "image" in obs_key:
-        #         obs_keys_to_remove.append(obs_key)
+        # if not args.keep_full_pc and "point_cloud" in obs:
+        #     del obs["point_cloud"]
         #
-        #     if args.dont_store_depth and "depth" in obs_key:
-        #         obs_keys_to_remove.append(obs_key)
+        #     if args.segmentation and "segmented_point_cloud" in obs:
+        #         del obs["segmented_point_cloud"]
         #
-        #     if args.segmentation and "mask" in obs_key:
-        #         obs_keys_to_remove.append(obs_key)
-
-        for obs_key in obs_keys_to_remove:
-            if obs_key in obs:
-                del obs[obs_key]
+        # elif args.segmentation and "segmented_point_cloud" in obs:
+        #     obs["segmented_point_cloud"] = np.concatenate(
+        #         list(obs["segmented_point_cloud"].values())
+        #     )
+        #     max_segmented_pc_size = max(
+        #         max_segmented_pc_size, obs["segmented_point_cloud"].shape[0]
+        #     )
+        #
+        # obs_keys_to_remove = [
+        #     "sampled_point_cloud",
+        #     "segmented_sampled_point_cloud",
+        #     "uniform_sampled_point_cloud",
+        # ]
+        # # for obs_key in obs:
+        # #     if args.dont_store_image and "image" in obs_key:
+        # #         obs_keys_to_remove.append(obs_key)
+        # #
+        # #     if args.dont_store_depth and "depth" in obs_key:
+        # #         obs_keys_to_remove.append(obs_key)
+        # #
+        # #     if args.segmentation and "mask" in obs_key:
+        # #         obs_keys_to_remove.append(obs_key)
+        #
+        # for obs_key in obs_keys_to_remove:
+        #     if obs_key in obs:
+        #         del obs[obs_key]
 
         # drop invalid virtual camera observations (keep the valid mask)
-        invalid_suffixes = ("_image", "_depth", "_point", "_ray")
+        invalid_suffixes = ("_image", "_point", "_ray", "_depth")  # "_depth"
         for k in list(obs.keys()):
             if k.endswith("_valid"):
                 try:
@@ -175,7 +175,7 @@ def extract_trajectory(
         if args.point_ray_dtype in ("float16", "float32"):
             dtype = np.float16 if args.point_ray_dtype == "float16" else np.float32
             for k in list(obs.keys()):
-                if k.endswith("_point") or k.endswith("_ray"):
+                if k.endswith("_point") or k.endswith("_ray") or k.endswith("_depth"):
                     obs[k] = obs[k].astype(dtype, copy=False)
 
         # extract datagen info
@@ -193,7 +193,7 @@ def extract_trajectory(
         done = False
         if (done_mode == 1) or (done_mode == 2):
             # done = 1 at end of trajectory
-            done = done or (t == traj_len)
+            done = done or (t == traj_len - 1)
         if (done_mode == 0) or (done_mode == 2):
             # done = 1 when s' is task success state
             done = done or env._check_success()
@@ -306,18 +306,18 @@ def write_traj_to_file(
                                 data=np.array(traj["obs"][k]),
                                 compression="gzip",
                             )
-                        if args.include_next_obs:
-                            if args.no_compress:
-                                ep_data_grp.create_dataset(
-                                    "next_obs/{}".format(k),
-                                    data=np.array(traj["next_obs"][k]),
-                                )
-                            else:
-                                ep_data_grp.create_dataset(
-                                    "next_obs/{}".format(k),
-                                    data=np.array(traj["next_obs"][k]),
-                                    compression="gzip",
-                                )
+                        # if args.include_next_obs:
+                        #     if args.no_compress:
+                        #         ep_data_grp.create_dataset(
+                        #             "next_obs/{}".format(k),
+                        #             data=np.array(traj["next_obs"][k]),
+                        #         )
+                        #     else:
+                        #         ep_data_grp.create_dataset(
+                        #             "next_obs/{}".format(k),
+                        #             data=np.array(traj["next_obs"][k]),
+                        #             compression="gzip",
+                        #         )
 
                     if "datagen_info" in traj:
                         for k in traj["datagen_info"]:
@@ -630,6 +630,7 @@ def create_env_with_wrappers(env_name, args):
             env,
             num_cameras=args.num_virtual_cameras,
             include_depth=True,
+            seed=42,
         )
         env = VirtualPointRayMapWrapper(
             env,
@@ -755,7 +756,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_name",
         type=str,
-        default="multi_view_im128_spherecams.hdf5",
+        default="multi_view_mobilebase.hdf5",
         help="name of output hdf5 dataset",
     )
 
@@ -853,7 +854,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_procs",
         type=int,
-        default=2,
+        default=5,
         help="number of parallel processes for extracting image obs",
     )
 

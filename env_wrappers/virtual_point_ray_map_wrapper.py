@@ -5,6 +5,7 @@ import einops
 
 from robosuite.utils.camera_utils import get_camera_intrinsic_matrix, get_camera_extrinsic_matrix
 import robosuite.utils.transform_utils as T
+from robosuite import macros
 
 
 class VirtualPointRayMapWrapper(gym.Wrapper):
@@ -122,8 +123,8 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
                 pc_points[:, :3],
                 "(num_cam h w) c -> num_cam h w c",
                 num_cam=len(self.cam_names),
-                h=128,
-                w=128,
+                h=self.img_height,
+                w=self.img_width,
             )
         ).astype(np.float32)
 
@@ -131,7 +132,10 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
         ray_map = {}
         for i, cam in enumerate(self.cam_names):
             point_map[cam] = pc[i]
-            ray_map[cam] = self.get_ray_map(cam)
+            if not self.global_frame:
+                ray_map[cam] = self.get_ray_map_based_on_mobilebase(cam)
+            else:
+                ray_map[cam] = self.get_ray_map(cam)
 
         return point_map, ray_map
 
@@ -139,12 +143,17 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
         K = self._get_cam_intrinsic_matrix(cam_name)
         R = self._get_cam_extrinsic(cam_name)  # camera->world
 
-        u = np.arange(self.img_width)
-        v = np.arange(self.img_height)
+        u = np.arange(self.img_width) + 0.5  # pixel centers
+        v = np.arange(self.img_height) + 0.5
         uu, vv = np.meshgrid(u, v)
 
         ones = np.ones_like(uu)
-        pix = np.stack([uu, vv, ones], axis=-1).astype(np.float32)
+        if macros.IMAGE_CONVENTION != "opengl":
+            # OpenCV convention: z = 1
+            pix = np.stack([uu, vv, ones], axis=-1).astype(np.float32)  # HxW x3, x y z
+        else:
+            # OpenGL convention: z = -1, flip Y axis  # robocasa default is OpenGL convention, so this is the default behavior
+            pix = np.stack([uu, -vv, -ones], axis=-1).astype(np.float32)
 
         Kinv = np.linalg.inv(K)
         d_cam = pix @ Kinv.T
@@ -158,6 +167,56 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
 
         ray_map = np.concatenate([d_world, m], axis=-1).astype(np.float32)
         return ray_map
+
+    def get_ray_map_based_on_mobilebase(self, cam_name: str):
+        """
+        Returns the ray map expressed in the mobilebase0_center frame,
+        consistent with the point map produced when global_frame=False.
+
+        Each pixel is encoded as a 6D Plücker-like vector [d_base, m_base]:
+          - d_base : unit ray direction in the mobilebase frame
+          - m_base : C_base × d_base, where C_base is the camera origin in the mobilebase frame
+        """
+        K = self._get_cam_intrinsic_matrix(cam_name)
+        R = self._get_cam_extrinsic(cam_name)  # 4x4 camera->world
+
+        u = np.arange(self.img_width) + 0.5
+        v = np.arange(self.img_height) + 0.5
+        uu, vv = np.meshgrid(u, v)
+
+        ones = np.ones_like(uu)
+        if macros.IMAGE_CONVENTION != "opengl":
+            pix = np.stack([uu, vv, ones], axis=-1).astype(np.float32)
+        else:
+            pix = np.stack([uu, -vv, -ones], axis=-1).astype(np.float32)
+
+        Kinv = np.linalg.inv(K)
+        d_cam = pix @ Kinv.T
+        d_cam /= np.linalg.norm(d_cam, axis=-1, keepdims=True) + 1e-8
+
+        Rwc = R[:3, :3]   # camera->world rotation
+        C_world = R[:3, 3]  # camera origin in world frame
+
+        d_world = d_cam @ Rwc.T  # HxWx3
+
+        # mobilebase0_center pose (world frame)
+        base_pos = self.env.sim.data.get_site_xpos("mobilebase0_center")        # (3,)
+        base_rot = self.env.sim.data.get_site_xmat("mobilebase0_center").reshape(3, 3)  # R_wb
+
+        # world->base transform: R_bw = R_wb.T, t_bw = -R_bw @ base_pos
+        R_bw = base_rot.T
+        t_bw = -R_bw @ base_pos
+
+        # transform ray directions (rotation only)
+        d_base = d_world @ R_bw.T  # HxWx3
+
+        # transform camera origin
+        C_base = R_bw @ C_world + t_bw  # (3,)
+
+        # moment in the base frame
+        m_base = np.cross(C_base[None, None, :], d_base)
+
+        return np.concatenate([d_base, m_base], axis=-1).astype(np.float32)
 
     def _check_success(self):
         return self.env._check_success()
