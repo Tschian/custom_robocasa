@@ -219,7 +219,8 @@ class RobocasaQuarterSphereCameraWrapper(gym.Wrapper):
 
         ref_fixture = self.env.init_robot_base_pos
         pivot = np.array(ref_fixture.pos, dtype=np.float32)
-        print(f"Sampling camera poses around current pivot point: {pivot}")
+        # print(f"Sampling camera poses around current pivot point: {pivot}")
+        self.reference_pivot = pivot
 
         left_pos_w, _ = self._get_camera_world_pose(self.left_cam_name)
         right_pos_w, _ = self._get_camera_world_pose(self.right_cam_name)

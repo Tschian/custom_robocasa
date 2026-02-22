@@ -66,6 +66,7 @@ def extract_trajectory(
     done_mode,
     args,
     add_datagen_info=False,
+    demo_th=None,
 ):
     """
     Helper function to extract observations, rewards, and dones along a trajectory using
@@ -85,6 +86,9 @@ def extract_trajectory(
     # load the initial state
     env.reset()
     env.reset_to(initial_state)
+
+    if env.reference_pivot and demo_th:
+        print(f"{demo_th} with reference pivot: {env.reference_pivot}")
 
     # get updated ep meta in case it's been modified
     ep_meta = env.env.get_ep_meta()
@@ -535,6 +539,7 @@ def extract_multiple_trajectories_with_error(
                 done_mode=args.done_mode,
                 add_datagen_info=args.add_datagen_info,
                 args=args,
+                demo_th=ep,
             )
 
             # maybe copy reward or done signal from source file

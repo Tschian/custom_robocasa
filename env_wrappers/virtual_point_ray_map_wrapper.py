@@ -98,8 +98,20 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
         imgs = {cam: obs_dict[f"{cam}_image"] for cam in self.cam_names}
         depths = {cam: obs_dict[f"{cam}_depth"] for cam in self.cam_names}
 
+        n_pts = self.img_height * self.img_width
         o3d_point_cloud = o3d.geometry.PointCloud()
         for cam in self.cam_names:
+            valid_key = f"{cam}_valid"
+            if valid_key in obs_dict and int(np.asarray(obs_dict[valid_key]).item()) == 0:
+                # Invalid camera: insert zero-filled dummy to preserve per-camera
+                # slice positions in the concatenated point cloud for rearrange.
+                dummy = o3d.geometry.PointCloud()
+                dummy.points = o3d.utility.Vector3dVector(
+                    np.zeros((n_pts, 3), dtype=np.float64)
+                )
+                o3d_point_cloud += dummy
+                continue
+
             cam_intrinsics = self._get_cam_intrinsic(cam)
             o3d_depth = o3d.geometry.Image(depths[cam])
             o3d_cloud = o3d.geometry.PointCloud.create_from_depth_image(
@@ -132,6 +144,11 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
         ray_map = {}
         for i, cam in enumerate(self.cam_names):
             point_map[cam] = pc[i]
+            valid_key = f"{cam}_valid"
+            if valid_key in obs_dict and int(np.asarray(obs_dict[valid_key]).item()) == 0:
+                # Invalid camera: zero-filled ray map, consistent with zero point map.
+                ray_map[cam] = np.zeros((self.img_height, self.img_width, 6), dtype=np.float32)
+                continue
             if not self.global_frame:
                 ray_map[cam] = self.get_ray_map_based_on_mobilebase(cam)
             else:
