@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH -A hk-project-p0022253
+#SBATCH -A hk-project-p0024023
 #SBATCH -p accelerated
+#SBATCH -J dataset_process # Cluster Settings
 #SBATCH -n 1
 #SBATCH -t 10:00:00
 #SBATCH --gres=gpu:1
-#SBATCH -c 4
-
-#SBATCH --output=/home/hk-project-robolear/ll6323/project/fast_mail/slurm_jobs/output/%j.out
+#SBATCH --output=/home/hk-project-p0024023/mn4777/depth_vla/slurm_jobs/robocasa/%x_%j.out
+#SBATCH --error=/home/hk-project-p0024023/mn4777/depth_vla/slurm_jobs/robocasa/%x_%j.err
 
 eval "$(conda shell.bash hook)"
 conda activate robocasa
@@ -22,4 +22,4 @@ export MPI_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
-python -m robocasa.scripts.dataset_states_to_obs \
+srun python custom_robocasa/robocasa/scripts/dataset_states_to_obs.py

@@ -947,32 +947,33 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
+    # data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
+    data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
     env_name = [
         # "PnPCabToCounter",
         # "PnPCounterToCab",
-        # "PnPCounterToMicrowave",
-        # "PnPCounterToSink",
+        "PnPCounterToMicrowave",
+        "PnPCounterToSink",
         # "PnPCounterToStove",
-        # "PnPMicrowaveToCounter",
-        # "PnPSinkToCounter",
+        "PnPMicrowaveToCounter",
+        "PnPSinkToCounter",
         # "PnPStoveToCounter",
-        # "TurnOffStove",
-        # "TurnOnStove",
-        # "TurnOffSinkFaucet",
-        # "TurnOnSinkFaucet",
+        "TurnOffStove",
+        "TurnOnStove",
+        "TurnOffSinkFaucet",
+        "TurnOnSinkFaucet",
         "TurnSinkSpout",
-        # "TurnOffMicrowave",
-        # "TurnOnMicrowave",
-        # "CloseDrawer",
-        # "OpenDrawer",
+        "TurnOffMicrowave",
+        "TurnOnMicrowave",
+        "CloseDrawer",
+        "OpenDrawer",
         # "CloseDoubleDoor",
         # "CloseSingleDoor",
         # "OpenDoubleDoor",
         # "OpenSingleDoor",
-        # "CoffeePressButton",
-        # "CoffeeServeMug",
-        # "CoffeeSetupMug"
+        "CoffeePressButton",
+        "CoffeeServeMug",
+        "CoffeeSetupMug"
     ]
 
     for env in env_name:
