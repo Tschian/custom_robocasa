@@ -962,7 +962,7 @@ if __name__ == "__main__":
         "TurnOnStove",
         "TurnOffSinkFaucet",
         "TurnOnSinkFaucet",
-        "TurnSinkSpout",
+        # "TurnSinkSpout",
         "TurnOffMicrowave",
         "TurnOnMicrowave",
         "CloseDrawer",
