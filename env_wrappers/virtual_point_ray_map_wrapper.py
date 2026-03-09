@@ -113,7 +113,13 @@ class VirtualPointRayMapWrapper(gym.Wrapper):
                 continue
 
             cam_intrinsics = self._get_cam_intrinsic(cam)
-            o3d_depth = o3d.geometry.Image(depths[cam])
+            # Replace zero-depth pixels with a tiny value so that
+            # create_from_depth_image does not silently drop them.
+            # Dropping pixels causes the point count to differ from H*W
+            # and breaks the subsequent einops rearrange.
+            depth_arr = np.asarray(depths[cam]).copy()
+            depth_arr[depth_arr == 0] = 1e-9
+            o3d_depth = o3d.geometry.Image(depth_arr)
             o3d_cloud = o3d.geometry.PointCloud.create_from_depth_image(
                 o3d_depth, cam_intrinsics
             )

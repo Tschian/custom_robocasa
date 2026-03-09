@@ -23,4 +23,6 @@ export MPI_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
+export PYTHONPATH=/hkfs/work/workspace/scratch/mn4777-qian_space/custom_robocasa/custom_robocasa:$PYTHONPATH
+
 srun python custom_robocasa/robocasa/scripts/dataset_states_to_obs.py
