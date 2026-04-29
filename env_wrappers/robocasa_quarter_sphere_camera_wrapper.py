@@ -509,7 +509,7 @@ if __name__ == "__main__":
     from robocasa.utils.env_utils import create_env
     import cv2
 
-    base_env = create_env(env_name="TurnSinkSpout")
+    base_env = create_env(env_name="CoffeePressButton")
     wrapped_env = RobocasaQuarterSphereCameraWrapper(
         base_env,
         num_cameras=8,
@@ -538,9 +538,9 @@ if __name__ == "__main__":
             print(f"Virtual camera {right_name} is valid.")
 
 
-    # for key, img in images.items():
-    #     img = img[::-1]
-    #     cv2.imshow(f"{key}", img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    for key, img in images.items():
+        img = img[::-1]
+        cv2.imshow(f"{key}", img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
     

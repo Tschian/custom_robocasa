@@ -262,8 +262,8 @@ class PointCloudGenerator:
         d_world = d_cam @ Rwc.T  # HxWx3
 
         # mobilebase0_center pose (world frame)
-        base_pos = self.env.sim.data.get_site_xpos("mobilebase0_center")        # (3,)
-        base_rot = self.env.sim.data.get_site_xmat("mobilebase0_center").reshape(3, 3)  # R_wb
+        base_pos = self.sim.data.get_site_xpos("mobilebase0_center")        # (3,)
+        base_rot = self.sim.data.get_site_xmat("mobilebase0_center").reshape(3, 3)  # R_wb
 
         # world->base transform: R_bw = R_wb.T, t_bw = -R_bw @ base_pos
         R_bw = base_rot.T
@@ -277,5 +277,56 @@ class PointCloudGenerator:
 
         # moment in the base frame
         m_base = np.cross(C_base[None, None, :], d_base)
+
+        return np.concatenate([d_base, m_base], axis=-1).astype(np.float32)
+
+    def get_normalized_ray_map_on_mobilebase(self, cam_name: str):
+        """
+        Same as get_ray_map_based_on_mobilebase but with the moment also
+        normalized to unit length, so both halves of the 6D vector are
+        dimensionless unit vectors (physical scale is discarded).
+
+        The mobilebase0_center frame is used as the world pivot, consistent
+        with the point map produced when global_frame=False.
+
+        Each pixel: [d_base (unit dir), m_base / ||m_base|| (unit moment)]
+        """
+        K = get_camera_intrinsic_matrix(self.sim, cam_name, self.img_height, self.img_width)
+        R = get_camera_extrinsic_matrix(self.sim, cam_name)  # 4x4, camera->world
+
+        u = np.arange(self.img_width) + 0.5
+        v = np.arange(self.img_height) + 0.5
+        uu, vv = np.meshgrid(u, v)
+
+        ones = np.ones_like(uu)
+        if macros.IMAGE_CONVENTION != "opengl":
+            pix = np.stack([uu, vv, ones], axis=-1).astype(np.float32)
+        else:
+            pix = np.stack([uu, -vv, -ones], axis=-1).astype(np.float32)
+
+        Kinv = np.linalg.inv(K)
+        d_cam = pix @ Kinv.T
+        d_cam /= np.linalg.norm(d_cam, axis=-1, keepdims=True) + 1e-8
+
+        Rwc = R[:3, :3]
+        C_world = R[:3, 3]
+
+        d_world = d_cam @ Rwc.T  # HxWx3
+
+        # mobilebase0_center pose (world frame)
+        base_pos = self.sim.data.get_site_xpos("mobilebase0_center")         # (3,)
+        base_rot = self.sim.data.get_site_xmat("mobilebase0_center").reshape(3, 3)  # R_wb
+
+        # world->base: R_bw = R_wb.T
+        R_bw = base_rot.T
+        t_bw = -R_bw @ base_pos
+
+        # ray direction and camera origin in base frame
+        d_base = d_world @ R_bw.T                # HxWx3, unit vectors
+        C_base = R_bw @ C_world + t_bw           # (3,)
+
+        # moment, then normalize to discard physical scale
+        m_base = np.cross(C_base[None, None, :], d_base)          # HxWx3
+        m_base /= np.linalg.norm(m_base, axis=-1, keepdims=True) + 1e-8  # unit moment
 
         return np.concatenate([d_base, m_base], axis=-1).astype(np.float32)

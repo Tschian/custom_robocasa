@@ -36,6 +36,9 @@ from custom_robocasa.env_wrappers.virtual_point_ray_map_wrapper import (
 from custom_robocasa.env_wrappers.robocasa_quarter_sphere_camera_wrapper import (
     RobocasaQuarterSphereCameraWrapper,
 )
+from custom_robocasa.env_wrappers.robocasa_local_sphere_camera_wrapper import (
+    RobocasaLocalSphereCameraWrapper,
+)
 # from custom_robocasa.env_wrappers.point_cloud_sampling_wrapper import (
 #     PointCloudSamplingWrapper,
 # )
@@ -87,7 +90,7 @@ def extract_trajectory(
     env.reset()
     env.reset_to(initial_state)
 
-    if env.reference_pivot is not None and demo_th:
+    if hasattr(env, 'reference_pivot') and env.reference_pivot is not None and demo_th:
         print(f"{demo_th} with reference pivot: {env.reference_pivot}")
 
     # get updated ep meta in case it's been modified
@@ -639,7 +642,26 @@ def create_env_with_wrappers(env_name, args):
         #     num_points=args.pc_size,
         # )
     env = RobosuiteWrapper(base_env)
-    if args.use_virtual_cameras:
+    if args.use_local_sphere:
+        print("RobocasaLocalSphereCameraWrapper")
+        env = RobocasaLocalSphereCameraWrapper(
+            env,
+            num_cameras=args.num_virtual_cameras,
+            include_depth=True,
+            seed=None,  # OS entropy → different positions per episode
+            az_half=args.az_half,
+            el_half=args.el_half,
+            radius_range=(args.radius_min, args.radius_max),
+        )
+        env = VirtualPointRayMapWrapper(
+            env,
+            virtual_cam_names=env.get_virtual_camera_names(),
+            virtual_intrinsic_fn=env.virtual_intrinsic_fn,
+            virtual_extrinsic_fn=env.virtual_extrinsic_fn,
+            include_real_cams=True,
+        )
+    elif args.use_virtual_cameras:
+        print("RobocasaVirtualCameraCameraWrapper")
         env = RobocasaQuarterSphereCameraWrapper(
             env,
             num_cameras=args.num_virtual_cameras,
@@ -776,7 +798,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_name",
         type=str,
-        default="multi_view_mobilebase.hdf5",
+        default="small_multiview_mobilebase.hdf5",
         help="name of output hdf5 dataset",
     )
 
@@ -874,7 +896,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_procs",
         type=int,
-        default=5,
+        default=4,
         help="number of parallel processes for extracting image obs",
     )
 
@@ -941,7 +963,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--use_virtual_cameras",
-        default=True,
+        default=False,
         help="use virtual multiview cameras + virtual point/ray map wrapper",
     )
 
@@ -950,6 +972,41 @@ if __name__ == "__main__":
         type=int,
         default=8,
         help="number of virtual cameras per side",
+    )
+
+    parser.add_argument(
+        "--use_local_sphere",
+        action="store_true",
+        default=True,
+        help="use episode-specific local-sphere virtual cameras (RobocasaLocalSphereCameraWrapper)",
+    )
+
+    parser.add_argument(
+        "--az_half",
+        type=float,
+        default=15.0,
+        help="azimuth half-range in degrees for local sphere camera sampling",
+    )
+
+    parser.add_argument(
+        "--el_half",
+        type=float,
+        default=15.0,
+        help="elevation half-range in degrees for local sphere camera sampling",
+    )
+
+    parser.add_argument(
+        "--radius_min",
+        type=float,
+        default=1.0,
+        help="minimum radius scale multiplier for local sphere camera sampling",
+    )
+
+    parser.add_argument(
+        "--radius_max",
+        type=float,
+        default=1.2,
+        help="maximum radius scale multiplier for local sphere camera sampling",
     )
 
     parser.add_argument(
@@ -962,30 +1019,30 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
-    data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
+    data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
+    # data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
     env_name = [
-        # "PnPCabToCounter",
-        # "PnPCounterToCab",
+        "PnPCabToCounter",
+        "PnPCounterToCab",
         "PnPCounterToMicrowave",
         "PnPCounterToSink",
-        # "PnPCounterToStove",
+        "PnPCounterToStove",
         "PnPMicrowaveToCounter",
         "PnPSinkToCounter",
-        # "PnPStoveToCounter",
+        "PnPStoveToCounter",
         "TurnOffStove",
         "TurnOnStove",
         "TurnOffSinkFaucet",
         "TurnOnSinkFaucet",
-        # "TurnSinkSpout",
+        "TurnSinkSpout",
         "TurnOffMicrowave",
         "TurnOnMicrowave",
         "CloseDrawer",
         "OpenDrawer",
-        # "CloseDoubleDoor",
-        # "CloseSingleDoor",
-        # "OpenDoubleDoor",
-        # "OpenSingleDoor",
+        "CloseDoubleDoor",
+        "CloseSingleDoor",
+        "OpenDoubleDoor",
+        "OpenSingleDoor",
         "CoffeePressButton",
         "CoffeeServeMug",
         "CoffeeSetupMug"

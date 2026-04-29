@@ -33,7 +33,7 @@ def extract_trajectory(env, initial_state, states, actions, done_mode, args, dem
     env.reset()
     env.reset_to(initial_state)
 
-    if env.reference_pivot is not None and demo_th:
+    if hasattr(env, 'reference_pivot') and env.reference_pivot is not None and demo_th:
         print(f"{demo_th} with reference pivot: {env.reference_pivot}")
 
     ep_meta = env.env.get_ep_meta()
