@@ -733,7 +733,7 @@ def dataset_states_to_obs_multiprocessing(args):
     lock = multiprocessing.Lock()
     total_samples_shared = multiprocessing.Value("i", 0)
     num_finished = multiprocessing.Value("i", 0)
-    mul_queue = multiprocessing.Queue()
+    mul_queue = multiprocessing.Queue(maxsize=num_processes * 2)
     work_queue = multiprocessing.Queue()
     for index in range(num_demos):
         work_queue.put(index)
@@ -970,7 +970,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_virtual_cameras",
         type=int,
-        default=8,
+        default=3,
         help="number of virtual cameras per side",
     )
 
@@ -1019,8 +1019,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
-    # data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
+    # data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
+    data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
     env_name = [
         "PnPCabToCounter",
         "PnPCounterToCab",
