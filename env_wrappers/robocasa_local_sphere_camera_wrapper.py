@@ -190,10 +190,13 @@ class RobocasaLocalSphereCameraWrapper(gym.Wrapper):
             )
             if self.include_depth:
                 rgb, depth = img
-                obs[f"{name}_image"] = rgb[::convention]
-                obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
+                # obs[f"{name}_image"] = rgb[::convention]
+                # obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
+                obs[f"{name}_image"] = np.flip(rgb, axis=0)
+                obs[f"{name}_depth"] = np.expand_dims(np.flip(depth, axis=0), axis=-1)
             else:
-                obs[f"{name}_image"] = img[::convention]
+                # obs[f"{name}_image"] = img[::convention]
+                obs[f"{name}_image"] = np.flip(img, axis=0)
             obs[f"{name}_valid"] = np.array([1], dtype=np.uint8)
 
         # Render right virtual cameras
@@ -219,10 +222,13 @@ class RobocasaLocalSphereCameraWrapper(gym.Wrapper):
             )
             if self.include_depth:
                 rgb, depth = img
-                obs[f"{name}_image"] = rgb[::convention]
-                obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
+                # obs[f"{name}_image"] = rgb[::convention]
+                # obs[f"{name}_depth"] = np.expand_dims(depth[::convention], axis=-1)
+                obs[f"{name}_image"] = np.flip(rgb, axis=0)
+                obs[f"{name}_depth"] = np.expand_dims(np.flip(depth, axis=0), axis=-1)
             else:
-                obs[f"{name}_image"] = img[::convention]
+                # obs[f"{name}_image"] = img[::convention]
+                obs[f"{name}_image"] = np.flip(img, axis=0)
             obs[f"{name}_valid"] = np.array([1], dtype=np.uint8)
 
         # Restore base cameras
