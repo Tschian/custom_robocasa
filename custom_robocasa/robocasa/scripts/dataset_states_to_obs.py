@@ -1019,8 +1019,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
-    data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
+    data_directory = "/home/qian-wang/depth_vla/robocasa/datasets/v0.1/single_stage"
+    # data_directory = "/hkfs/work/workspace/scratch/mn4777-qian_space/robocasa/datasets/v0.1/single_stage"
     env_name = [
         "PnPCabToCounter",
         "PnPCounterToCab",
